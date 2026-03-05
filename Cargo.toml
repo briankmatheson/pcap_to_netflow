@@ -1,0 +1,32 @@
+[package]
+name = "pcap_to_netflow"
+version = "0.1.0"
+edition = "2021"
+description = "Convert Wireshark PCAP/PCAPNG captures to raw netflow Parquet files"
+authors = []
+
+[[bin]]
+name = "pcap_to_netflow"
+path = "src/main.rs"
+
+[dependencies]
+# PCAP parsing
+pcap-file   = "2.0"
+etherparse  = "0.15"
+
+# Parquet / Arrow
+arrow       = { version = "52", features = ["chrono-tz"] }
+parquet     = { version = "52", features = ["arrow"] }
+
+# CLI
+clap        = { version = "4", features = ["derive"] }
+
+# Misc
+chrono      = { version = "0.4", features = ["serde"] }
+glob        = "0.3"
+anyhow      = "1"
+
+[profile.release]
+opt-level   = 3
+lto         = true
+codegen-units = 1

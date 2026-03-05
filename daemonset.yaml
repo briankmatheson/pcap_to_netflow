@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: pcap-netflow-ingest
+  namespace: monitoring
+  labels:
+    app: pcap-netflow-ingest
+spec:
+  selector:
+    matchLabels:
+      app: pcap-netflow-ingest
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: pcap-netflow-ingest
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      tolerations:
+        - operator: Exists
+      terminationGracePeriodSeconds: 30
+      serviceAccountName: pcap-netflow-ingest
+
+      containers:
+        - name: pipeline
+          image: your-registry/pcap_to_netflow:latest
+          imagePullPolicy: Always
+          command: ["/usr/local/bin/pipeline.sh"]
+
+          env:
+            - name: DEEPTEMPO_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: deeptempo-secret
+                  key: token
+
+            - name: DEEPTEMPO_URL
+              value: "https://ui.deeptempo.ai"
+
+            - name: CAPTURE_IFACE
+              value: "eth0"
+
+            - name: CAPTURE_FILTER
+              value: ""            # e.g. "not port 22 and not arp"
+
+            - name: FLOW_TIMEOUT
+              value: "120"
+
+            - name: ROTATE_SECS
+              value: "60"
+
+          securityContext:
+            capabilities:
+              add:
+                - NET_RAW
+                - NET_ADMIN
+            runAsUser: 0
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          volumeMounts:
+            - name: tmp-scratch
+              mountPath: /tmp
+
+          livenessProbe:
+            exec:
+              command: [pgrep, -x, tcpdump]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+
+      volumes:
+        - name: tmp-scratch
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pcap-netflow-ingest
+  namespace: monitoring
+
+---
+# kubectl create secret generic deeptempo-secret \
+#   --namespace monitoring \
+#   --from-literal=token='eyJhbGci...'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: deeptempo-secret
+  namespace: monitoring
+type: Opaque
+stringData:
+  token: "REPLACE_WITH_TOKEN"
